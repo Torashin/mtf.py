@@ -1,11 +1,11 @@
 """Modulation Transfer Function Module for slanted edge figures
 
-The optical transfer function (OTF) of an optical system specifies 
-how different spatial frequencies are handled by the system. 
-It is used by optical engineers to describe how the optics project 
-light from the object or scene onto detector or simply the next item 
-in the optical transmission chain. 
-A variant, the modulation transfer function (MTF), neglects phase effects, 
+The optical transfer function (OTF) of an optical system specifies
+how different spatial frequencies are handled by the system.
+It is used by optical engineers to describe how the optics project
+light from the object or scene onto detector or simply the next item
+in the optical transmission chain.
+A variant, the modulation transfer function (MTF), neglects phase effects,
 but is equivalent to the OTF in many situations.
 
 look also: https://en.wikipedia.org/wiki/Optical_transfer_function
@@ -15,7 +15,7 @@ But for slanted edge targeted MTF calculations we use LSF instead of PSF.
 This is because we assume LSF as cross-section of PSF along slant.
 LSF can be optained using detivative of Edge Spread Function (ESF).
 
-For line scan operations it is better to calculate along track and 
+For line scan operations it is better to calculate along track and
 across track MTF's.
 
 Also for non symetrical pixel pitch/sizes it will also be convinient
@@ -27,7 +27,6 @@ Dependencies
     Pillow numpy scipy matpilotlib opencv-python
 """
 import matplotlib.pyplot as plt
-import pylab as pylab
 import numpy as np
 import cv2 as cv2
 import math as math
@@ -48,7 +47,7 @@ class cSet:
         numpy array to store indexes
     y : np.ndarray
         numpy array to store values
-    """    
+    """
     x: np.ndarray
     y: np.ndarray
 
@@ -70,7 +69,7 @@ class cESF:
         slant angle in degrees
     edgePoly : np.ndarray
         polynomial of edge slant
-    """    
+    """
     rawESF: cSet
     interpESF: cSet
     threshold:float
@@ -92,7 +91,7 @@ class cMTF:
         MTF value at Nyquist Frequency
     width : float
         Pixel transition
-    """    
+    """
     x: np.ndarray
     y: np.ndarray
     mtfAtNyquist: float
@@ -106,7 +105,7 @@ class Verbosity(Enum):
     NONE : no output
     BRIEF : brif text output
     DETAIL : graphical output
-    """    
+    """
     NONE = 0
     BRIEF = 1
     DETAIL = 2
@@ -124,7 +123,7 @@ class Helper:
         Returns
         PIL.Image
             Grayscale image data
-        """    
+        """
         img = Image.open(filename)
         if img.mode in {'I;16','I;16L','I;16B','I;16N'}:
             gsimg = img
@@ -133,42 +132,50 @@ class Helper:
         return gsimg
 
     @staticmethod
-    def LoadImageAsArray(filename):
+    def LoadImageAsArray(filename: str) -> np.ndarray:
         """
-        Load and convert image from given path to numpy array
+        Load and convert an image from the given path to a numpy array.
         ...
         Parameters
         filename : str
-            a fully quialified file name of the image
+            A fully qualified file name of the image.
         ...
         Returns
-        np.darray
-            Grayscale image data as numpy array with values between 0.0 and 1.0
-        """    
+        np.ndarray
+            Grayscale image data as a numpy array with values between 0.0 and 1.0.
+        """
         img = Helper.LoadImage(filename)
-        if img.mode in {'I;16','I;16L','I;16B','I;16N'}:
-            arr = np.asarray(img, dtype=np.double)/65535
+        arr = np.asarray(img, dtype=np.double)
+
+        # Normalize pixel values to the range [0.0, 1.0]
+        if img.mode in {'I;16', 'I;16L', 'I;16B', 'I;16N'}:
+            arr /= 65535
         else:
-            arr = np.asarray(img, dtype=np.double)/255
+            arr /= 255
+
         return arr
 
     @staticmethod
-    def ImageToArray(img):
+    def ImageToArray(img: Image) -> np.ndarray:
         """
-        Convert PIL image to numpy array
+        Convert PIL image to numpy array.
         ...
         Parameters
         img : PIL.Image
-            Source image
+            Source image.
         ...
         Returns
-        np.darray
-            Grayscale image data as numpy array with values between 0.0 and 1.0
-        """    
-        if img.mode in {'I;16','I;16L','I;16B','I;16N'}:
-            arr = np.asarray(img, dtype=np.double)/65535
+        np.ndarray
+            Grayscale image data as numpy array with values between 0.0 and 1.0.
+        """
+        arr = np.asarray(img, dtype=np.double)
+
+        # Normalize pixel values to the range [0.0, 1.0]
+        if img.mode in {'I;16', 'I;16L', 'I;16B', 'I;16N'}:
+            arr /= 65535
         else:
-            arr = np.asarray(img, dtype=np.double)/255
+            arr /= 255
+
         return arr
 
     @staticmethod
@@ -183,63 +190,75 @@ class Helper:
         Returns
         PIL.Image
             Grayscale PIL image
-        """    
+        """
         img = Image.fromarray(imgArr*255, mode='L')
         return img
 
     @staticmethod
-    def CorrectImageOrientation(imgArr):
+    def CorrectImageOrientation(imgArr: np.ndarray) -> np.ndarray:
         """
-        Rotate, transpose, flip image to get correct orientation for analysis
-        Module assumes a "dark side up" horizontal slanted image
+        Rotate, transpose, or flip the image to correct orientation for analysis.
+        Module assumes a "dark side up" horizontal slanted image.
         ...
         Parameters
-        imgArr : np.darray
-            Image data as numpy array having values between 0.0 and 1.0
+        imgArr : np.ndarray
+            Image data as a numpy array with values between 0.0 and 1.0.
         ...
         Returns
-        np.darray
-            Orientation corrected image array
-        """    
-        tl = np.average(imgArr[0:2,0:2])
-        tr = np.average(imgArr[0:2,-3:-1])
-        bl = np.average(imgArr[-3:-1,0:2])
-        br = np.average(imgArr[-3:-1,-3:-1])
+        np.ndarray
+            Orientation corrected image array.
+        """
+        if imgArr is None or imgArr.size == 0:
+            raise ValueError("Invalid image array provided.")
+
+        tl = np.average(imgArr[0:2, 0:2])
+        tr = np.average(imgArr[0:2, -3:-1])
+        bl = np.average(imgArr[-3:-1, 0:2])
+        br = np.average(imgArr[-3:-1, -3:-1])
         edges = [tl, tr, bl, br]
         edgeIndexes = np.argsort(edges)
+
         if (edgeIndexes[0] + edgeIndexes[1]) == 1:
-            pass
+            return imgArr
         elif (edgeIndexes[0] + edgeIndexes[1]) == 5:
-            imgArr = np.flip(imgArr, axis=0)
+            return np.flip(imgArr, axis=0)
         elif (edgeIndexes[0] + edgeIndexes[1]) == 2:
-            imgArr = np.transpose(imgArr)
+            return np.transpose(imgArr)
         elif (edgeIndexes[0] + edgeIndexes[1]) == 4:
-            imgArr = np.flip(np.transpose(imgArr), axis=0)
-        
-        return imgArr
-  
+            return np.flip(np.transpose(imgArr), axis=0)
+
+        raise ValueError("Image orientation could not be determined.")
+
+
 class MTF:
     @staticmethod
     def SafeCrop(values, distances, head, tail):
         """
-        Safely crop a index-value array from head to tail
-        Note that, method does not crop operation uses values of distance
-          not index itself
-        ...
-        Parameters
-        value : np.darray
-            Value array
-        distances : np.darray
-            Index array
-        head : float
-            Desired crop start index value
-        tail : float
-            Desired crop end index value
-        ...
-        Returns
-        cSet
-            crop result as cSet
-        """
+                Safely crop a index-value array from head to tail
+                Note that, method does not crop operation uses values of distance
+                  not index itself
+                ...
+                Parameters
+                value : np.darray
+                    Value array
+                distances : np.darray
+                    Index array
+                head : float
+                    Desired crop start index value
+                tail : float
+                    Desired crop end index value
+                ...
+                Returns
+                cSet
+                    crop result as cSet
+                """
+
+        if distances.size == 0 or values.size == 0:
+            raise ValueError("Input arrays are empty.")
+
+        if head >= tail:
+            raise ValueError(f"Invalid cropping range: head ({head}) must be less than tail ({tail}).")
+
         isIncrementing = True
         if distances[0] > distances[-1]:
             isIncrementing = False
@@ -247,7 +266,6 @@ class MTF:
             dummy = -tail
             tail = -head
             head = dummy
-
 
         hindex = (np.where(distances < head)[0])
         tindex = (np.where(distances > tail)[0])
@@ -271,7 +289,7 @@ class MTF:
     def GetEdgeSpreadFunction(imgArr, edgePoly, verbose=Verbosity.NONE):
         """
         Calculate Edge Spred Function (ESF)
-        
+
         ESF is simply distance map of every pixel to the given edge polynomial
         https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
         ...
@@ -299,40 +317,40 @@ class MTF:
 
         distances = np.reshape(distance, X*Y)
         indexes = np.argsort(distances)
-        
+
         sign = 1
         if np.average(values[indexes[:10]]) > np.average(values[indexes[-10:]]):
             sign = -1
 
         values = values[indexes]
-        distances = sign*distances[indexes]     
-        
+        distances = sign*distances[indexes]
+
         if (distances[0] > distances[-1]):
             distances = np.flip(distances)
             values = np.flip(values)
 
-        if (verbose == Verbosity.BRIEF):
-            print("Raw ESF [done] (Distance from {0:2.2f} to {1:2.2f})".format(sign*distances[0], sign*distances[-1]))
+        if verbose == Verbosity.BRIEF:
+            print(f"Raw ESF [done] (Distance from {sign * distances[0]:2.2f} to {sign * distances[-1]:2.2f})")
+
 
         elif (verbose == Verbosity.DETAIL):
             x = [0, np.size(imgArr,1)-1]
             y = np.polyval(edgePoly, x)
 
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title('Raw ESF')
+            fig = plt.figure()
+            plt.suptitle('Raw ESF')
             (ax1, ax2) = plt.subplots(2)
             ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
             ax1.plot(x, y, color='red')
             ax2.plot(distances, values)
             plt.show()
-            plt.show(block=False)
 
         return cSet(distances, values)
 
     @staticmethod
     def GetEdgeSpreadFunctionCrop(imgArr, verbose=Verbosity.NONE):
         """
-        Calculate and crop Edge Spread Function (ESF). 
+        Calculate and crop Edge Spread Function (ESF).
         Crop occures around center of transition
         ...
         Parameters
@@ -379,10 +397,10 @@ class MTF:
         knots = np.quantile(esfRaw.x, qs)
         tck = interpolate.splrep(esfRaw.x, esfRaw.y, t=knots, k=3)
         ysmooth = interpolate.splev(esfRaw.x, tck)
-        
+
         InterpDistances = np.linspace(esfRaw.x[0], esfRaw.x[-1], 500)
         InterpValues = np.interp(InterpDistances, esfRaw.x, ysmooth)
-        
+
         esfInterp = cSet(InterpDistances, InterpValues)
 
         if (verbose == Verbosity.BRIEF):
@@ -392,8 +410,8 @@ class MTF:
             x = [0, np.size(imgArr,1)-1]
             y = np.polyval(finalEdgePoly, x)
 
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title('ESF Crop')
+            fig = plt.figure()
+            plt.suptitle('ESF Crop')
             (ax1, ax2) = plt.subplots(2)
             ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
             ax1.plot(x, y, color='red')
@@ -406,7 +424,7 @@ class MTF:
     @staticmethod
     def SimplifyEdgeSpreadFunction(esf, verbose=Verbosity.NONE):
         """
-        Remove dublicate distance occurances of Edge Spread Function. 
+        Remove dublicate distance occurances of Edge Spread Function.
         ...
         Parameters
         esf : cSet
@@ -423,10 +441,10 @@ class MTF:
         indexes = res[1]
         counts = res[2]
         sz = np.size(res[0])
-        
+
         distances = esf.x[indexes]
         values = np.zeros(sz, dtype=np.float)
-        
+
         for x in range(sz):
             values[x] = np.sum(esf.y[indexes[x]:indexes[x]+counts[x]])/counts[x]
 
@@ -434,8 +452,8 @@ class MTF:
             print("ESF Simplification [done] (Size from {0:d} to {1:d})".format(np.size(esf.x), np.size(distances)))
 
         elif (verbose == Verbosity.DETAIL):
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title("ESF Simplification (Size from {0:d} to {1:d})".format(np.size(esf.x), np.size(distances)))
+            fig = plt.figure()
+            plt.suptitle("ESF Simplification (Size from {0:d} to {1:d})".format(np.size(esf.x), np.size(distances)))
             (ax1, ax2) = plt.subplots(2)
             ax1.plot(esf.x, esf.y)
             ax2.plot(distances, values)
@@ -448,7 +466,7 @@ class MTF:
     def GetLineSpreadFunction(esf, normalize=True, verbose=Verbosity.NONE):
         """
         Calculate Line Spread Function (LSF) from ESF
-        
+
         LSF is simply the derivative of ESF.
         For a better result, an interpolated ESF can be used instead of raw ESF
         ...
@@ -477,8 +495,8 @@ class MTF:
             print("MTF [done]")
 
         elif (verbose == Verbosity.DETAIL):
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title("LSF")
+            fig = plt.figure()
+            plt.suptitle("LSF")
             (ax1) = plt.subplots(1)
             ax1.plot(lsfDistances, lsfValues)
             plt.show(block=False)
@@ -511,18 +529,16 @@ class MTF:
         interpValues = interp(interpDistances)
         valueAtNyquist = interpValues[25]*100
 
-        if (verbose == Verbosity.BRIEF):
+        if verbose == Verbosity.BRIEF:
             print("MTF [done]")
 
-        elif (verbose == Verbosity.DETAIL):
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title("MTF ({0:2.2f}% at Nyquist)".format(valueAtNyquist))
-            (ax1) = plt.subplots(1)
-            ax1.plot(interpDistances, interpValues)
-            #ax1.plot( values)
+        elif verbose == Verbosity.DETAIL:
+            fig, ax = plt.subplots()
+            ax.plot(interpDistances, interpValues)
+            ax.set_title(f"MTF ({valueAtNyquist:.2f}% at Nyquist)")
+            ax.grid(True)
             plt.show(block=False)
-            plt.show()
-        
+
         return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0)
 
     @staticmethod
@@ -538,7 +554,7 @@ class MTF:
         ...
         Returns
         cMTF
-            MTF value set 
+            MTF value set
         """
         imgArr = Helper.CorrectImageOrientation(imgArr)
         esf = MTF.GetEdgeSpreadFunctionCrop(imgArr, Verbosity.NONE)
@@ -546,14 +562,14 @@ class MTF:
         mtf = MTF.GetMTF(lsf, Verbosity.NONE)
 
         if (verbose == Verbosity.BRIEF):
-            print("MTF at Nyquist:{0:0.2f}%, Transition Width:{1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
+            print("MTF at Nyquist: {0:0.2f}%, Transition Width: {1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
 
         elif (verbose == Verbosity.DETAIL):
             x = [0, np.size(imgArr,1)-1]
             y = np.polyval(esf.edgePoly, x)
 
-            fig = pylab.gcf()
-            fig.canvas.manager.set_window_title('MTF Analysis')
+            fig = plt.figure()
+            plt.suptitle('MTF Analysis')
             gs = fig.add_gridspec(3,2)
             ax1 = fig.add_subplot(gs[0, 0])
             ax2 = fig.add_subplot(gs[1, 0])
@@ -578,7 +594,35 @@ class MTF:
             ax4.set_title("MTF at Nyquist:{0:0.2f}%\nTransition Width:{1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
             ax4.grid(True)
 
-            plt.show(block=False)
             plt.show()
+            print("")
 
-        return cMTF(x, y, mtf.mtfAtNyquist, esf.width)
+        return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
+
+    @staticmethod
+    def GetMtfValue(mtfResult: cMTF, frequency: float) -> float:
+        """
+        Get MTF value at a given frequency using cubic interpolation.
+
+        Parameters
+        mtfResult : cMTF
+            MTF result data
+        frequency : float
+            Desired frequency to get the MTF value for
+
+        Returns
+        float
+            MTF value at the given frequency
+        """
+        # Ensure that the frequency is within the range of the data
+        if frequency < mtfResult.x[0] or frequency > mtfResult.x[-1]:
+            raise ValueError(
+                f"Frequency {frequency} is out of range. Valid range is from {mtfResult.x[0]} to {mtfResult.x[-1]}")
+
+        # Prepare the cubic interpolator
+        interp_function = interpolate.interp1d(mtfResult.x, mtfResult.y, kind='cubic', fill_value="extrapolate")
+
+        # Calculate the interpolated MTF value
+        interpolated_value = interp_function(frequency)
+
+        return interpolated_value
