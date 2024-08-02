@@ -351,7 +351,7 @@ class MTF:
     def GetEdgeSpreadFunctionCrop(imgArr, verbose=Verbosity.NONE):
         """
         Calculate and crop Edge Spread Function (ESF).
-        Crop occures around center of transition
+        Crop occurs around center of transition
         ...
         Parameters
         imgArr : np.darray
@@ -364,16 +364,25 @@ class MTF:
             Extended ESF information
         """
         imgArr = Helper.CorrectImageOrientation(imgArr)
-        edgeImg = cv2.Canny(np.uint8(imgArr*255), 40, 90, L2gradient=True)
+
+        # Apply Gaussian Blur to reduce noise
+        blurred_img = cv2.GaussianBlur(np.uint8(imgArr * 255), (3, 3), 0)
+
+        # Adjust thresholds for Canny edge detection
+        lower_threshold = 40
+        upper_threshold = 90
+
+        # Apply Canny edge detection
+        edgeImg = cv2.Canny(blurred_img, lower_threshold, upper_threshold, L2gradient=True)
 
         line = np.argwhere(edgeImg == 255)
-        edgePoly = np.polyfit(line[:,1],line[:,0],1)
+        edgePoly = np.polyfit(line[:, 1], line[:, 0], 1)
         angle = math.degrees(math.atan(-edgePoly[0]))
 
         finalEdgePoly = edgePoly.copy()
         if angle > 0:
             imgArr = np.flip(imgArr, axis=1)
-            finalEdgePoly[1] = np.polyval(edgePoly,np.size(imgArr,1)-1)
+            finalEdgePoly[1] = np.polyval(edgePoly, np.size(imgArr, 1) - 1)
             finalEdgePoly[0] = -edgePoly[0]
 
         esf = MTF.GetEdgeSpreadFunction(imgArr, finalEdgePoly, Verbosity.NONE)
@@ -389,11 +398,11 @@ class MTF:
         head = np.amax(esfDistances[(np.where(esfValues < minimum + threshold))[0]])
         tail = np.amin(esfDistances[(np.where(esfValues > maximum - threshold))[0]])
 
-        width = abs(head-tail)
+        width = abs(head - tail)
 
-        esfRaw = MTF.SafeCrop(esfValues, esfDistances, head - 1.2*width, tail + 1.2*width)
+        esfRaw = MTF.SafeCrop(esfValues, esfDistances, head - 1.2 * width, tail + 1.2 * width)
 
-        qs = np.linspace(0,1,20)[1:-1]
+        qs = np.linspace(0, 1, 20)[1:-1]
         knots = np.quantile(esfRaw.x, qs)
         tck = interpolate.splrep(esfRaw.x, esfRaw.y, t=knots, k=3)
         ysmooth = interpolate.splev(esfRaw.x, tck)
@@ -407,16 +416,14 @@ class MTF:
             print("ESF Crop [done] (Distance from {0:2.2f} to {1:2.2f})".format(esfRaw.x[0], esfRaw.x[-1]))
 
         elif (verbose == Verbosity.DETAIL):
-            x = [0, np.size(imgArr,1)-1]
+            x = [0, np.size(imgArr, 1) - 1]
             y = np.polyval(finalEdgePoly, x)
 
-            fig = plt.figure()
+            fig, (ax1, ax2) = plt.subplots(2)  # Correctly unpack the axes
             plt.suptitle('ESF Crop')
-            (ax1, ax2) = plt.subplots(2)
             ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
             ax1.plot(x, y, color='red')
-            ax2.plot(esfRaw.x, esfRaw.y,InterpDistances,InterpValues)
-            plt.show(block=False)
+            ax2.plot(esfRaw.x, esfRaw.y, InterpDistances, InterpValues)
             plt.show()
 
         return cESF(esfRaw, esfInterp, threshold, width, angle, edgePoly)
