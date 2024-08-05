@@ -94,21 +94,21 @@ def process_image(image_path, frequency, roi=None):
 
     # Check if imgArr is empty or invalid
     if imgArr.size == 0:
-        print(f"Error: Image array is empty after cropping for {image_path}")
+        #print(f"Error: Image array is empty after cropping for {image_path}")
         return None
 
     # Calculate MTF from the image array with no verbosity
     try:
         res = mtf.MTF.CalculateMtf(imgArr, verbose=mtf.Verbosity.NONE)
     except Exception as e:
-        print(f"Error calculating MTF for {image_path}: {e}")
+        #print(f"Error calculating MTF for {image_path}: {e}")
         return None
 
     # Get MTF value for the given frequency
     try:
         mtf_value = mtf.MTF.GetMtfValue(res, frequency)
     except Exception as e:
-        print(f"Error getting MTF value for {image_path}: {e}")
+        #print(f"Error getting MTF value for {image_path}: {e}")
         return None
 
     return mtf_value
@@ -122,10 +122,15 @@ def batch_process(directory_path, frequency):
     - directory_path: str, path to the directory containing image files
     - frequency: float, frequency at which to calculate the MTF
     """
-    # Define the file pattern for image files (e.g., jpg, jpeg, png)
-    file_pattern = os.path.join(directory_path, '*.[jp][pn]g')  # Matches .jpg and .png files
-    jpeg_pattern = os.path.join(directory_path, '*.jpeg')        # Matches .jpeg files
-    image_paths = sorted(glob.glob(file_pattern) + glob.glob(jpeg_pattern))  # Get list of files in alphabetical order
+    # Define patterns to search for .jpg, .jpeg, and .png files up to 4 levels deep
+    file_pattern = os.path.join(directory_path, '**', '*.[jp][pn]g')
+    jpeg_pattern = os.path.join(directory_path, '**', '*.jpeg')
+
+    # Use glob.glob with recursive=True to enable searching in subfolders
+    image_paths = sorted(glob.glob(file_pattern, recursive=True) + glob.glob(jpeg_pattern, recursive=True))
+
+    # Filter the results to limit the search depth to 4 levels
+    image_paths = [path for path in image_paths if len(path.split(os.sep)) - len(directory_path.split(os.sep)) <= 4]
 
     if not image_paths:
         raise ValueError("No images found in the specified directory.")
@@ -134,24 +139,27 @@ def batch_process(directory_path, frequency):
     first_image_path = image_paths[0]
     roi = get_roi(first_image_path)
 
+
     results = {}
     for path in image_paths:
         try:
             mtf_value = process_image(path, frequency, roi)
             if mtf_value is None:
-                print(f"MTF value for {path} at frequency {frequency} couldn't be calculated.")
+                pass
+                #print(f"MTF value for {path} at frequency {frequency} couldn't be calculated.")
             else:
                 results[path] = mtf_value
-                print(f"MTF value for {path} at frequency {frequency}: {100 * mtf_value:.1f}%")
+                print(f"MTF value for {path} at frequency {frequency:.3f}: {100 * mtf_value:.1f}%")
         except Exception as e:
-            print(f"Error processing {path}: {e}")
+            pass
+            #print(f"Error processing {path}: {e}")
 
     return results
 
 if __name__ == "__main__":
     # Define the directory path and the frequency of interest
-    directory_path = r'path/to/files'  # Replace with your directory path
-    frequency = 0.1  # Example frequency for MTF calculation
+    directory_path = r'path/to/images'  # Replace with your directory path
+    frequency = 0.5  # Example frequency for MTF calculation
 
     # Process the images in the directory
     batch_results = batch_process(directory_path, frequency)

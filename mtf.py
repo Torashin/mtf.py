@@ -28,12 +28,12 @@ Dependencies
 """
 import matplotlib.pyplot as plt
 import numpy as np
-import cv2 as cv2
-import math as math
+import cv2
+import math
 
 from PIL import Image, ImageOps
 from scipy import interpolate
-from scipy.fft import fft
+from scipy.fft import fft, fftfreq
 from enum import Enum
 from dataclasses import dataclass
 
@@ -441,6 +441,7 @@ class MTF:
             ax1.axis('off')
             # Plot detected edges overlay
             ax2.imshow(edgeImg, cmap='gray')
+            ax2.plot(x, y, color='red', linestyle='--')
             ax2.set_title("Detected Edges Overlay")
             ax2.axis('off')
             # Plot raw ESF and interpolated ESF
@@ -557,26 +558,33 @@ class MTF:
             MTF value set except pixel transition width
         """
         N = np.size(lsf.x)
-        px = N/(lsf.x[-1]-lsf.x[0])
-        values = 1/np.sum(lsf.y)*abs(fft(lsf.y))
-        distances = np.arange(0,N)/N*px
+        px = N / (lsf.x[-1] - lsf.x[0])
+        fft_length = 3000
 
-        interpDistances = np.linspace(0,1,50)
-        interp = interpolate.interp1d(distances, values, kind='cubic')
-        interpValues = interp(interpDistances)
-        valueAtNyquist = interpValues[25]*100
+        # Calculate FFT
+        fft_values = fft(lsf.y, n=fft_length)
+        fft_distances = fftfreq(fft_length, d=(lsf.x[-1] - lsf.x[0]) / N)
+
+        # Take the magnitude of the FFT and consider only the positive frequencies
+        values = 1 / np.sum(lsf.y) * np.abs(fft_values[:fft_length // 2])
+        fft_distances = fft_distances[:fft_length // 2]
+
+        # Find the value at the Nyquist frequency (0.5 cycles per pixel)
+        nyquist_freq = 0.5
+        idx_nyquist = np.argmin(np.abs(fft_distances - nyquist_freq))
+        valueAtNyquist = values[idx_nyquist] * 100
 
         if verbose == Verbosity.BRIEF:
             print("MTF [done]")
 
         elif verbose == Verbosity.DETAIL:
             fig, ax = plt.subplots()
-            ax.plot(interpDistances, interpValues)
+            ax.plot(fft_distances, values)
             ax.set_title(f"MTF ({valueAtNyquist:.2f}% at Nyquist)")
             ax.grid(True)
             plt.show(block=False)
 
-        return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0)
+        return cMTF(fft_distances, values, valueAtNyquist, -1.0)
 
     @staticmethod
     def CalculateMtf(imgArr, verbose=Verbosity.NONE):
@@ -630,6 +638,7 @@ class MTF:
             ax4.plot(mtf.x, mtf.y)
             ax4.set_title("MTF at Nyquist:{0:0.2f}%\nTransition Width:{1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
             ax4.grid(True)
+            ax4.set_xlim(0, 0.2)  # Set x-axis range for ax4
 
             plt.show()
             print("")
@@ -661,6 +670,11 @@ class MTF:
 
         # Calculate the interpolated MTF value
         interpolated_value = interp_function(frequency)
+
+        if interpolated_value < 0:
+            interpolated_value = 0
+        elif interpolated_value > 100:
+            interpolated_value = None
 
         return interpolated_value
 
