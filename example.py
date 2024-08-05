@@ -1,7 +1,7 @@
 import mtf as mtf
 
 # Load the image as a numpy array
-imgArr = mtf.Helper.LoadImageAsArray('slant.png')
+imgArr = mtf.Helper.LoadImageAsArray(r'slant.png')
 
 # Calculate MTF from the image array with detailed verbosity
 res = mtf.MTF.CalculateMtf(imgArr, verbose=mtf.Verbosity.DETAIL)

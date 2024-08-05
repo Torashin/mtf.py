@@ -351,10 +351,10 @@ class MTF:
     def GetEdgeSpreadFunctionCrop(imgArr, verbose=Verbosity.NONE):
         """
         Calculate and crop Edge Spread Function (ESF).
-        Crop occurs around center of transition
+        Crop occurs around the center of transition.
         ...
         Parameters
-        imgArr : np.darray
+        imgArr : np.ndarray
             Image data as numpy array having values between 0.0 and 1.0
         verbose : Verbosity
             Output verbosity level
@@ -369,13 +369,19 @@ class MTF:
         blurred_img = cv2.GaussianBlur(np.uint8(imgArr * 255), (3, 3), 0)
 
         # Adjust thresholds for Canny edge detection
-        lower_threshold = 40
-        upper_threshold = 90
+        lower_threshold = 20
+        upper_threshold = 50
 
         # Apply Canny edge detection
         edgeImg = cv2.Canny(blurred_img, lower_threshold, upper_threshold, L2gradient=True)
 
+        # Find the edge lines
         line = np.argwhere(edgeImg == 255)
+
+        if line.size == 0:
+            raise ValueError("No edges detected in the image. Check the edge detection parameters or image quality.")
+
+        # Fit a line to the edge points
         edgePoly = np.polyfit(line[:, 1], line[:, 0], 1)
         angle = math.degrees(math.atan(-edgePoly[0]))
 
@@ -415,15 +421,39 @@ class MTF:
         if (verbose == Verbosity.BRIEF):
             print("ESF Crop [done] (Distance from {0:2.2f} to {1:2.2f})".format(esfRaw.x[0], esfRaw.x[-1]))
 
+
         elif (verbose == Verbosity.DETAIL):
             x = [0, np.size(imgArr, 1) - 1]
             y = np.polyval(finalEdgePoly, x)
 
-            fig, (ax1, ax2) = plt.subplots(2)  # Correctly unpack the axes
+            # Plotting
+            fig = plt.figure()
             plt.suptitle('ESF Crop')
+            # Set up subplots
+            gs = fig.add_gridspec(2, 2)
+            ax1 = fig.add_subplot(gs[0, 0])
+            ax2 = fig.add_subplot(gs[1, 0])
+            ax3 = fig.add_subplot(gs[:, 1])
+            # Plot original image with edge lines
             ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
-            ax1.plot(x, y, color='red')
-            ax2.plot(esfRaw.x, esfRaw.y, InterpDistances, InterpValues)
+            ax1.plot(x, y, color='red', linestyle='--')
+            ax1.set_title("Original Image with Detected Edges")
+            ax1.axis('off')
+            # Plot detected edges overlay
+            ax2.imshow(edgeImg, cmap='gray')
+            ax2.set_title("Detected Edges Overlay")
+            ax2.axis('off')
+            # Plot raw ESF and interpolated ESF
+            ax3.plot(esfRaw.x, esfRaw.y, label='Raw ESF')
+            ax3.plot(esfInterp.x, esfInterp.y, label='Interpolated ESF', linestyle='--')
+            top = np.max(esfRaw.y) - threshold
+            bot = np.min(esfRaw.y) + threshold
+            ax3.plot([esfRaw.x[0], esfRaw.x[-1]], [top, top], color='red', linestyle='--', label='Top Threshold')
+            ax3.plot([esfRaw.x[0], esfRaw.x[-1]], [bot, bot], color='blue', linestyle='--', label='Bottom Threshold')
+            ax3.legend()
+            ax3.set_title("Edge Spread Function")
+            ax3.xaxis.set_visible(False)
+            ax3.yaxis.set_visible(False)
             plt.show()
 
         return cESF(esfRaw, esfInterp, threshold, width, angle, edgePoly)
@@ -633,3 +663,6 @@ class MTF:
         interpolated_value = interp_function(frequency)
 
         return interpolated_value
+
+
+
